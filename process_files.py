@@ -1,4 +1,5 @@
 import gzip
+from datetime import datetime
 
 
 additional_data_code = {
@@ -20,14 +21,25 @@ additional_data_code = {
 
 }
 
-temp_map = {}
+temp_map = {} # To be used for generating statistics
 wind_map = {}
-def add_data(year, mday, data, store):
+temp_map_allyears = {} # To compare individual points
+def add_data(year, mday, data, store, actual_store):
+
+    # convert type of mday from string to datetime
+    mday = datetime(day=int(mday[2:4]), month=int(mday[0:2]), year=2000) # ?
+    actual_day = datetime(day=int(mday[2:4]), month=int(mday[0:2]), year=year)
+
     if not store.has_key(mday):
         store[mday] = []
     data_int = int(data)
     if not data_int == 9999:
         store[mday].append((int(year), data_int))
+
+        if actual_store:
+            if not actual_store.has_key(actual_day):
+                actual_store[actual_day] = []
+            actual_store[actual_day].append(data_int)
 
 def read_archive(archivename):
     with gzip.open(archivename, 'rb') as f:
@@ -91,12 +103,14 @@ for mday in temp_map.keys():
         year_arr = numpy.array(temp_list_collected[i])
 
         # Some values missing???
-        if len(year_arr) == 0: year_arr = [9999]
-
-        temp_list_mean[i] = numpy.mean(year_arr)
+        if len(year_arr) == 0: #year_arr = [9999]
+            temp_list_mean[i] = None
+        else:
+            temp_list_mean[i] = numpy.mean(year_arr)
 
     # remove values
-    filter(lambda a: a == 9999, temp_list_mean)
+    temp_list_mean = filter(lambda a: a != None, temp_list_mean)
+
 
 
     # Calculate stats with numpy
@@ -131,7 +145,73 @@ for mday in temp_map.keys():
             n_events_year[i] += 1
 
 # Display event count per year
-for i in range(len(n_events_year)):
-    year = 1950 + i
-    n = n_events_year[i]
-    print "%s: %s" % (year, n)
+# for i in range(len(n_events_year)):
+#     year = 1950 + i
+#     n = n_events_year[i]
+#     print "%s: %s" % (year, n)
+
+
+# Bokeh displays
+from bokeh.plotting import figure, output_file, show
+
+output_file("lines.html")
+
+y = temp_avg.values()
+xs = temp_avg.keys()
+#x = ["%s/%s/2000" % (i[2:4], i[0:2]) for i in xs]
+#x = [datetime(day=int(i[2:4]), month=int(i[0:2]), year=2000) for i in xs]
+x = xs
+
+# Sort the lists
+x, y = (list(i) for i in zip(*sorted(zip(x, y), key=lambda pair: pair[0])))
+
+y_mean = y#temp_avg.values()
+
+# Variance / std
+y_upper = []
+y_lower = []
+for i in temp_avg.keys():
+    y_upper.append( temp_avg[i] + temp_std[i] )
+    y_lower.append( temp_avg[i] - temp_std[i] )
+
+x, y_upper = (list(i) for i in zip(*sorted(zip(temp_avg.keys(), y_upper), key=lambda pair: pair[0])))
+x, y_lower = (list(i) for i in zip(*sorted(zip(temp_avg.keys(), y_lower), key=lambda pair: pair[0])))
+
+
+# all values
+x_all = []
+y_all = []
+y_var_index = []
+for k, v in temp_map.iteritems():
+    for i in v:
+        x_all.append(k)
+        y_all.append(i)
+
+        # stats for this k
+        std = temp_std[k]
+        avg = temp_avg[k]
+        ind = int(abs(i - avg) / std)
+        y_var_index.append(ind)
+
+# Find the year that high-index points are occuring
+
+
+# value colour index
+colour_value = ['#0000ff', '#000088', '#0000ff', '#000088', 'orange', 'red', 'purple']
+y_colour = []
+for i in y_var_index:
+    y_colour.append(colour_value[i])
+
+# Figure
+p = figure(title="Temperature statistics",
+x_axis_label='day of year',
+x_axis_type='datetime',
+y_axis_label='Temperature (C)')
+
+#p.circle(x, y, legend="Temperature (C)") # Individual data points
+p.circle(x_all, y_all, legend="Temperature (C)", color=y_colour) # Individual data points
+p.line(x, y_mean, legend="mean", color='#121212', line_width=2) # mean
+p.line(x, y_upper, legend="upper", color='#898989', line_width=2) # upper var
+p.line(x, y_lower, legend="lower", color='#898989', line_width=2) # lower var
+
+show(p)
