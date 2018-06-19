@@ -56,6 +56,9 @@ python process_gsod_allstats.py
 The chart functionality comes courtesy of the Bokeh library which generates interactive html output. 
 
 ### Charting a world map
+```
+python chart/map_plot.py <union_file>
+```
 
 This will show all the locations on a geographic map of the world. 
 
