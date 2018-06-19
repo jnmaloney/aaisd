@@ -54,5 +54,5 @@ python process_gsod_allstats.py
 ## Chart
 
 ```
-python charts\process_outliers_locs.py
+python chart/process_outliers_locs.py
 ```
